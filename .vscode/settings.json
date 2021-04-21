@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.inlayHints.enable": false,
+    "cSpell.words": [
+        "pixure"
+    ]
+}
