@@ -7,6 +7,7 @@ use actix_web::{web, HttpResponse, Responder};
 use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::{doc, oid::ObjectId};
 use std::io::Write;
+use std::sync::Arc;
 
 pub fn config_media(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -21,11 +22,13 @@ pub async fn add_media(mut payload: Multipart) -> impl Responder {
     while let Ok(Some(mut field)) = payload.try_next().await {
         let mut res = Resource::<SeaweedFsId>::from((&field, ObjectId::new()));
         res.alloc().await;
-        let filepath = format!(
+        let filepath = Arc::new(format!(
             "./tmp/{}",
             sanitize_filename::sanitize(res.get_storage().as_ref().unwrap().get_uid())
-        );
-        let mut f = web::block(|| std::fs::File::create(filepath))
+        ));
+
+        let fp = filepath.clone();
+        let mut f = web::block(move || std::fs::File::create(fp.as_ref()))
             .await
             .expect("File creation error")
             .unwrap();
@@ -38,6 +41,12 @@ pub async fn add_media(mut payload: Multipart) -> impl Responder {
                 .expect("Error writing to file")
                 .unwrap();
         }
+
+        let fp2 = filepath.clone();
+        web::block(move || std::fs::remove_file(fp2.as_ref()))
+            .await
+            .expect("Error removing file")
+            .unwrap();
     }
     HttpResponse::Ok()
 }
