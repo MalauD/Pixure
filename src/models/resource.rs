@@ -44,6 +44,7 @@ pub trait Readable {
 #[async_trait]
 pub trait Writable {
     async fn save(&self, stream: BytesStream) -> ();
+    async fn alloc() -> Self;
 }
 
 pub trait Identifiable {
@@ -96,6 +97,14 @@ where
         }
     }
 
+    pub async fn alloc(&mut self) {
+        self._storage.get_or_insert(StorageType::alloc().await);
+    }
+
+    pub fn get_storage(&self) -> &Option<StorageType> {
+        &self._storage
+    }
+
     pub fn get_doc(&self) -> &Document {
         &self._doc
     }
@@ -136,11 +145,11 @@ where
     }
 }
 
-impl<StorageType> From<(Field, ObjectId)> for Resource<StorageType>
+impl<StorageType> From<(&Field, ObjectId)> for Resource<StorageType>
 where
     StorageType: Readable + Writable + Identifiable + DeserializeOwned,
 {
-    fn from(input: (Field, ObjectId)) -> Self {
+    fn from(input: (&Field, ObjectId)) -> Self {
         let doc = doc! {
             "owner": input.1.clone(),
             "r_access": [input.1.clone()],

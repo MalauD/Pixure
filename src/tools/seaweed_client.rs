@@ -25,6 +25,11 @@ pub struct VolumeLookup {
     locations: Vec<VolumeLocation>,
 }
 
+#[derive(Deserialize)]
+pub struct AssignId {
+    fid: String,
+}
+
 #[cached(size = 100)]
 async fn get_volume_addr(volume: i16) -> String {
     let url = format!("http://5.1.1.1:9333/dir/lookup?volumeId={}", volume);
@@ -71,14 +76,14 @@ impl SeaweedFsClient {
     pub async fn get_alloc(&self) -> SeaweedFsId {
         let url = "http://5.1.1.1:9333/dir/assign";
         let res = self.get_client().get(url).send().await.expect("Failed");
-        res.json().await.unwrap()
+        let result: AssignId = res.json().await.unwrap();
+        SeaweedFsId::new(result.fid.clone())
     }
 
     pub async fn set_file<'a>(&'a self, fid: &'a SeaweedFsId, stream: BytesStream) {
         let addr = get_volume_addr(fid.get_volume()).await;
         let body = Body::wrap_stream(stream);
-        self
-            .get_client()
+        self.get_client()
             .post(format!("http://{}/{}", addr, fid.get_uid()))
             .body(body)
             .send()
