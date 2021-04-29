@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{stream, Stream};
 use mime::Mime;
-use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
+use mongodb::bson::{doc, oid::ObjectId, to_bson, Bson, Document};
 use reqwest::Result;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 
 extern crate std;
 
@@ -43,7 +43,7 @@ pub trait Readable {
 
 #[async_trait]
 pub trait Writable {
-    async fn save(&self, stream: BytesStream) -> ();
+    async fn save(&self, data: Vec<u8>) -> ();
     async fn alloc() -> Self;
 }
 
@@ -56,7 +56,7 @@ pub trait Identifiable {
 
 pub struct Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned,
+    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
 {
     _storage: Option<StorageType>,
     _doc: Document,
@@ -70,7 +70,7 @@ where
 
 impl<StorageType> Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned,
+    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
 {
     pub async fn read(&self, request_id_o: Option<ObjectId>) -> BytesStream {
         if self.r_public {
@@ -84,14 +84,14 @@ where
         return Box::pin(stream::empty());
     }
 
-    pub async fn save(&self, request_id_o: Option<ObjectId>, stream: BytesStream) {
+    pub async fn save(&self, request_id_o: Option<ObjectId>, data: Vec<u8>) {
         if self.w_public {
-            self._storage.as_ref().unwrap().save(stream).await;
+            self._storage.as_ref().unwrap().save(data).await;
             return;
         }
         if let Some(request_id) = request_id_o {
             if request_id == self.get_owner() || self.w_access.contains(&request_id) {
-                self._storage.as_ref().unwrap().save(stream).await;
+                self._storage.as_ref().unwrap().save(data).await;
                 return;
             }
         }
@@ -99,14 +99,22 @@ where
 
     pub async fn alloc(&mut self) {
         self._storage.get_or_insert(StorageType::alloc().await);
+        self._doc.insert(
+            "_storage",
+            to_bson(self._storage.as_ref().unwrap()).unwrap(),
+        );
     }
 
     pub fn get_storage(&self) -> &Option<StorageType> {
         &self._storage
     }
 
-    pub fn get_doc(&self) -> &Document {
+    pub fn get_doc_ref(&self) -> &Document {
         &self._doc
+    }
+
+    pub fn get_doc(&self) -> Document {
+        self._doc.clone()
     }
 
     pub fn new(doc: &Document) -> Self {
@@ -147,7 +155,7 @@ where
 
 impl<StorageType> From<(&Field, ObjectId)> for Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned,
+    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
 {
     fn from(input: (&Field, ObjectId)) -> Self {
         let doc = doc! {
@@ -164,7 +172,7 @@ where
 
 impl<StorageType> Media for Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned,
+    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
 {
     fn get_dim(&self) -> Dim {
         todo!()

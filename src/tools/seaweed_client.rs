@@ -80,12 +80,11 @@ impl SeaweedFsClient {
         SeaweedFsId::new(result.fid.clone())
     }
 
-    pub async fn set_file<'a>(&'a self, fid: &'a SeaweedFsId, stream: BytesStream) {
+    pub async fn set_file<'a>(&'a self, fid: &'a SeaweedFsId, data: Vec<u8>) {
         let addr = get_volume_addr(fid.get_volume()).await;
-        let body = Body::wrap_stream(stream);
         self.get_client()
             .post(format!("http://{}/{}", addr, fid.get_uid()))
-            .body(body)
+            .body(data)
             .send()
             .await
             .expect("Cannot Upload");

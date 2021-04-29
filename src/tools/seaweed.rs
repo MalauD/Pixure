@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use mongodb::bson::{from_bson, Bson};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use std::{borrow::BorrowMut, string::String};
 
 use super::get_seaweed;
 use crate::models::{BytesStream, Identifiable, Readable, Writable};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct SeaweedFsId {
     id: String,
 }
@@ -21,9 +21,7 @@ impl SeaweedFsId {
     }
 
     pub fn new(fid: String) -> Self {
-        SeaweedFsId {
-            id: fid
-        }
+        SeaweedFsId { id: fid }
     }
 }
 
@@ -39,9 +37,9 @@ impl Readable for SeaweedFsId {
 
 #[async_trait]
 impl Writable for SeaweedFsId {
-    async fn save(&self, stream: BytesStream) -> () {
+    async fn save(&self, data: Vec<u8>) -> () {
         let client = get_seaweed().await;
-        client.set_file(self, stream).await;
+        client.set_file(self, data).await;
     }
 
     async fn alloc() -> SeaweedFsId {
@@ -59,6 +57,6 @@ impl Identifiable for SeaweedFsId {
         SeaweedFsId { id: uid }
     }
     fn from_bson(bson: &Bson) -> Self {
-        Self::from_uid(from_bson(bson.clone()).unwrap_or_default())
+       from_bson(bson.clone()).unwrap()
     }
 }

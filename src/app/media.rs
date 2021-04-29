@@ -5,9 +5,7 @@ use crate::tools::SeaweedFsId;
 use actix_multipart::Multipart;
 use actix_web::{web, HttpResponse, Responder};
 use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::{doc, oid::ObjectId};
-use std::io::Write;
-use std::sync::Arc;
+use mongodb::bson::oid::ObjectId;
 
 pub fn config_media(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -22,31 +20,15 @@ pub async fn add_media(mut payload: Multipart) -> impl Responder {
     while let Ok(Some(mut field)) = payload.try_next().await {
         let mut res = Resource::<SeaweedFsId>::from((&field, ObjectId::new()));
         res.alloc().await;
-        let filepath = Arc::new(format!(
-            "./tmp/{}",
-            sanitize_filename::sanitize(res.get_storage().as_ref().unwrap().get_uid())
-        ));
+        println!("{}", res.get_storage().as_ref().unwrap().get_uid());
+        get_mongo().await.save_resource(&res).await;
 
-        let fp = filepath.clone();
-        let mut f = web::block(move || std::fs::File::create(fp.as_ref()))
-            .await
-            .expect("File creation error")
-            .unwrap();
-
+        let mut file_data = Vec::new();
         while let Some(chunk) = field.next().await {
-            let data = chunk.unwrap();
-            // filesystem operations are blocking, we have to use threadpool
-            f = web::block(move || f.write_all(&data).map(|_| f))
-                .await
-                .expect("Error writing to file")
-                .unwrap();
+            file_data.append(&mut chunk.unwrap().to_vec());
         }
 
-        let fp2 = filepath.clone();
-        web::block(move || std::fs::remove_file(fp2.as_ref()))
-            .await
-            .expect("Error removing file")
-            .unwrap();
+        res.save(None, file_data).await;
     }
     HttpResponse::Ok()
 }
@@ -55,19 +37,8 @@ pub async fn get_media(path: web::Path<String>) -> impl Responder {
     let id = path.into_inner();
     let db = get_mongo().await;
 
-    let coll = db.collection("Media");
+    let doc: Resource<SeaweedFsId> = db.find_resource(&ObjectId::with_string(&id).unwrap()).await;
 
-    let found = coll
-        .find_one(
-            doc! {
-                "_id": ObjectId::with_string(&id).unwrap()
-            },
-            None,
-        )
-        .await
-        .expect("Error");
-
-    let doc = Resource::<SeaweedFsId>::new(&found.unwrap());
     HttpResponse::Ok()
         .content_type(doc.get_extension().essence_str())
         .streaming(ResponseStream {
