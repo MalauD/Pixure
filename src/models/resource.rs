@@ -1,13 +1,12 @@
-use std::pin::Pin;
-
+use crate::tools::ResourceErrorIO;
 use actix_multipart::Field;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::{stream, Stream};
+use futures::Stream;
 use mime::Mime;
 use mongodb::bson::{doc, oid::ObjectId, to_bson, Bson, Document};
-use reqwest::Result;
 use serde::{de::DeserializeOwned, Serialize};
+use std::pin::Pin;
 
 extern crate std;
 
@@ -34,7 +33,19 @@ pub trait Media {
     fn get_extension(&self) -> &Mime;
 }
 
-pub type BytesStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + Sync>>;
+#[derive(Debug)]
+pub enum UseType {
+    Reading,
+    Writing,
+}
+
+impl std::fmt::Display for UseType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+pub type BytesStream = Pin<Box<dyn Stream<Item = reqwest::Result<Bytes>> + Send + Sync>>;
 
 #[async_trait]
 pub trait Readable {
@@ -72,29 +83,37 @@ impl<StorageType> Resource<StorageType>
 where
     StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
 {
-    pub async fn read(&self, request_id_o: Option<ObjectId>) -> BytesStream {
+    pub async fn read(
+        &self,
+        request_id_o: Option<ObjectId>,
+    ) -> Result<BytesStream, ResourceErrorIO> {
         if self.r_public {
-            return self._storage.as_ref().unwrap().read().await;
+            return Ok(self._storage.as_ref().unwrap().read().await);
         }
         if let Some(request_id) = request_id_o {
             if request_id == self.get_owner() || self.r_access.contains(&request_id) {
-                return self._storage.as_ref().unwrap().read().await;
+                return Ok(self._storage.as_ref().unwrap().read().await);
             }
         }
-        return Box::pin(stream::empty());
+        return Err(ResourceErrorIO::InsufficientPermissions);
     }
 
-    pub async fn save(&self, request_id_o: Option<ObjectId>, data: Vec<u8>) {
+    pub async fn save(
+        &self,
+        request_id_o: Option<ObjectId>,
+        data: Vec<u8>,
+    ) -> Result<(), ResourceErrorIO> {
         if self.w_public {
             self._storage.as_ref().unwrap().save(data).await;
-            return;
+            return Ok(());
         }
         if let Some(request_id) = request_id_o {
             if request_id == self.get_owner() || self.w_access.contains(&request_id) {
                 self._storage.as_ref().unwrap().save(data).await;
-                return;
+                return Ok(());
             }
         }
+        return Err(ResourceErrorIO::InsufficientPermissions);
     }
 
     pub async fn alloc(&mut self) {
@@ -111,6 +130,10 @@ where
 
     pub fn get_doc_ref(&self) -> &Document {
         &self._doc
+    }
+
+    pub fn get_doc_ref_mut(&mut self) -> &mut Document {
+        &mut self._doc
     }
 
     pub fn get_doc(&self) -> Document {
@@ -150,6 +173,20 @@ where
             r_public: doc.get_bool("r_public").unwrap_or_default(),
             w_public: doc.get_bool("w_public").unwrap_or_default(),
         }
+    }
+
+    pub fn update_public_access(&mut self, r_public: Option<bool>, w_public: Option<bool>) {
+        self.r_public = match r_public {
+            None => self.r_public,
+            Some(e) => e,
+        };
+        *self.get_doc_ref_mut().get_bool_mut("r_public").unwrap() = self.r_public;
+
+        self.w_public = match w_public {
+            None => self.w_public,
+            Some(e) => e,
+        };
+        *self.get_doc_ref_mut().get_bool_mut("w_public").unwrap() = self.w_public;
     }
 }
 

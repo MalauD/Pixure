@@ -16,19 +16,27 @@ pub fn config_media(cfg: &mut web::ServiceConfig) {
 }
 
 pub async fn add_media(mut payload: Multipart) -> impl Responder {
+    let db = get_mongo().await;
     //TODO sanitize input
     while let Ok(Some(mut field)) = payload.try_next().await {
         let mut res = Resource::<SeaweedFsId>::from((&field, ObjectId::new()));
+        println!("Allocating data...");
         res.alloc().await;
         println!("{}", res.get_storage().as_ref().unwrap().get_uid());
-        get_mongo().await.save_resource(&res).await;
+        db.save_resource(&mut res).await;
 
         let mut file_data = Vec::new();
         while let Some(chunk) = field.next().await {
             file_data.append(&mut chunk.unwrap().to_vec());
         }
-
-        res.save(None, file_data).await;
+        println!("Saving data...");
+        res.update_public_access(Some(true), Some(true));
+        db.update_resource(&res).await;
+        let result = res.save(None, file_data).await;
+        match result {
+            Ok(_) => println!("Success"),
+            Err(e) => println!("{}", e),
+        }
     }
     HttpResponse::Ok()
 }
@@ -42,6 +50,6 @@ pub async fn get_media(path: web::Path<String>) -> impl Responder {
     HttpResponse::Ok()
         .content_type(doc.get_extension().essence_str())
         .streaming(ResponseStream {
-            stream: doc.read(None).await,
+            stream: doc.read(None).await.unwrap(),
         })
 }

@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use mongodb::{
     bson::{doc, oid::ObjectId, Document},
     options::ClientOptions,
@@ -19,12 +17,13 @@ pub struct MongoClient {
 }
 
 impl MongoClient {
-    pub async fn save_resource<T>(&self, doc: &Resource<T>)
+    pub async fn save_resource<T>(&self, doc: &mut Resource<T>)
     where
         T: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
     {
         let coll = self._database.collection::<Document>("Media");
-        coll.insert_one(doc.get_doc(), None).await;
+        let result = coll.insert_one(doc.get_doc(), None).await.unwrap();
+        doc.get_doc_ref_mut().insert("_id", result.inserted_id);
     }
 
     pub async fn find_resource<T>(&self, id: &ObjectId) -> Resource<T>
@@ -43,6 +42,21 @@ impl MongoClient {
             .expect("Error");
 
         Resource::<T>::new(&found.unwrap())
+    }
+
+    pub async fn update_resource<T>(&self, res: &Resource<T>)
+    where
+        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+    {
+        let coll = self._database.collection::<Document>("Media");
+        let res_doc = res.get_doc();
+        coll.update_one(
+            doc! {"_id": res_doc.get_object_id("_id").unwrap()},
+            doc! {"$set": res_doc},
+            None,
+        )
+        .await
+        .unwrap();
     }
 }
 

@@ -1,7 +1,9 @@
 use cached::proc_macro::cached;
-use core::future::Future;
 use once_cell::sync::OnceCell;
-use reqwest::{Body, Client};
+use reqwest::{
+    multipart::{Form, Part},
+    Client,
+};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
@@ -82,9 +84,13 @@ impl SeaweedFsClient {
 
     pub async fn set_file<'a>(&'a self, fid: &'a SeaweedFsId, data: Vec<u8>) {
         let addr = get_volume_addr(fid.get_volume()).await;
+        let part = Part::bytes(data);
+        let form = Form::new().part("file", part);
+        let complete_addr = format!("http://{}/{}", addr, fid.get_uid());
+        println!("{}",complete_addr);
         self.get_client()
-            .post(format!("http://{}/{}", addr, fid.get_uid()))
-            .body(data)
+            .post(complete_addr)
+            .multipart(form)
             .send()
             .await
             .expect("Cannot Upload");
