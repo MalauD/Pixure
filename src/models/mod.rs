@@ -1,3 +1,4 @@
 mod resource;
+mod user;
 
-pub use self::resource::*;
+pub use self::{resource::*, user::*};

@@ -7,7 +7,7 @@ use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::Mutex;
 
-use crate::models::{Identifiable, Readable, Resource, Writable};
+use crate::models::{Identifiable, Readable, Resource, User, UserReq, Writable};
 
 static MONGO: OnceCell<MongoClient> = OnceCell::new();
 static MONGO_INITIALIZED: OnceCell<Mutex<bool>> = OnceCell::new();
@@ -57,6 +57,26 @@ impl MongoClient {
         )
         .await
         .unwrap();
+    }
+
+    pub async fn get_user(&self, user: &UserReq) -> Option<User> {
+        let coll = self._database.collection::<User>("User");
+        coll.find_one(doc! {"username": user.get_username()}, None)
+            .await
+            .unwrap()
+    }
+
+    pub async fn save_user(&self, user: User) {
+        let coll = self._database.collection::<User>("User");
+        coll.insert_one(user, None).await.unwrap();
+    }
+
+    pub async fn has_user_by_name(&self, user: &User) -> bool {
+        let coll = self._database.collection::<User>("User");
+        coll.count_documents(doc! {"username": user.get_username()}, None)
+            .await
+            .unwrap()
+            != 0
     }
 }
 

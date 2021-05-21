@@ -1,6 +1,6 @@
+mod error;
 mod seaweed;
 mod seaweed_client;
 mod stream;
-mod errors;
 
-pub use self::{seaweed::*, seaweed_client::*, stream::*, errors::*};
+pub use self::{error::*, seaweed::*, seaweed_client::*, stream::*};

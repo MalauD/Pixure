@@ -1,4 +1,4 @@
-use crate::tools::ResourceErrorIO;
+use crate::tools::ResourceIOError;
 use actix_multipart::Field;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -86,7 +86,7 @@ where
     pub async fn read(
         &self,
         request_id_o: Option<ObjectId>,
-    ) -> Result<BytesStream, ResourceErrorIO> {
+    ) -> Result<BytesStream, ResourceIOError> {
         if self.r_public {
             return Ok(self._storage.as_ref().unwrap().read().await);
         }
@@ -95,14 +95,16 @@ where
                 return Ok(self._storage.as_ref().unwrap().read().await);
             }
         }
-        return Err(ResourceErrorIO::InsufficientPermissions);
+        Err(ResourceIOError::InsufficientPermissions(
+            "reading".to_string(),
+        ))
     }
 
     pub async fn save(
         &self,
         request_id_o: Option<ObjectId>,
         data: Vec<u8>,
-    ) -> Result<(), ResourceErrorIO> {
+    ) -> Result<(), ResourceIOError> {
         if self.w_public {
             self._storage.as_ref().unwrap().save(data).await;
             return Ok(());
@@ -113,7 +115,9 @@ where
                 return Ok(());
             }
         }
-        return Err(ResourceErrorIO::InsufficientPermissions);
+        Err(ResourceIOError::InsufficientPermissions(
+            "writing".to_string(),
+        ))
     }
 
     pub async fn alloc(&mut self) {
