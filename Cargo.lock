@@ -63,6 +63,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-identity"
+version = "0.4.0-beta.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2fa74b5377d53b133c2a9ee8733f1381a145058775f910bfec1fc922df55471"
+dependencies = [
+ "actix-service",
+ "actix-web",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "time 0.2.26",
+]
+
+[[package]]
 name = "actix-macros"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1526,6 +1540,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 name = "pixure"
 version = "0.1.0"
 dependencies = [
+ "actix-identity",
  "actix-multipart",
  "actix-session",
  "actix-web",

@@ -5,7 +5,6 @@ use std::{num::NonZeroU32, u8};
 
 static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
 const CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
-pub type Credential = [u8; CREDENTIAL_LEN];
 static SALT_COMPONENT: [u8; 16] = [
     0xd6, 0x26, 0x98, 0xda, 0xf4, 0xdc, 0x50, 0x52, 0x24, 0xf2, 0x27, 0xd1, 0xfe, 0x39, 0x01, 0x8a,
 ];
@@ -53,13 +52,13 @@ impl User {
         salt
     }
 
-    pub fn new(req: UserReq) -> Self {
+    pub fn new(req: &UserReq) -> Self {
         let salt = Self::salt(&req.username);
         let iter = NonZeroU32::new(PBKDF2_ITER).unwrap();
-        let mut cred: Credential = [0u8; CREDENTIAL_LEN];
+        let mut cred = [0u8; CREDENTIAL_LEN];
         pbkdf2::derive(PBKDF2_ALG, iter, &salt, req.password.as_bytes(), &mut cred);
         Self {
-            username: req.username,
+            username: req.username.clone(),
             credential: cred.to_vec(),
         }
     }
