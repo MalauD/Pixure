@@ -17,13 +17,16 @@ pub fn config_user(cfg: &mut web::ServiceConfig) {
 
 pub async fn login(id: Identity, user: web::Json<UserReq>) -> impl Responder {
     let db = get_mongo().await;
-    let user_mod = db.get_user(&user).await.unwrap();
-    match user_mod.login(&user) {
-        Ok(_) => {
-            id.remember(user_mod.get_username());
-            HttpResponse::Ok().append_header(("location", "/")).finish()
+    if let Some(user_mod) = db.get_user(&user).await {
+        match user_mod.login(&user) {
+            Ok(_) => {
+                id.remember(user_mod.get_username());
+                HttpResponse::Ok().append_header(("location", "/")).finish()
+            }
+            Err(_) => HttpResponse::Unauthorized().finish(),
         }
-        Err(_) => HttpResponse::Unauthorized().finish(),
+    } else {
+        HttpResponse::Forbidden().finish()
     }
 }
 
