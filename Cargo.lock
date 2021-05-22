@@ -1542,6 +1542,7 @@ dependencies = [
  "ring",
  "sanitize-filename",
  "serde",
+ "serde_bytes",
  "static_init",
  "thiserror",
  "tokio",

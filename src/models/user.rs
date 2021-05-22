@@ -1,7 +1,7 @@
 use crate::tools::UserError;
 use ring::{digest, pbkdf2};
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, u8};
 
 static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
 const CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
@@ -26,7 +26,8 @@ impl UserReq {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct User {
     username: String,
-    credential: Credential,
+    #[serde(with = "serde_bytes")]
+    credential: Vec<u8>,
 }
 
 impl User {
@@ -59,7 +60,7 @@ impl User {
         pbkdf2::derive(PBKDF2_ALG, iter, &salt, req.password.as_bytes(), &mut cred);
         Self {
             username: req.username,
-            credential: cred,
+            credential: cred.to_vec(),
         }
     }
 
