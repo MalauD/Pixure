@@ -1,7 +1,14 @@
 use crate::tools::UserError;
+use actix_identity::Identity;
+use actix_web::{
+    dev::Payload, error::ErrorUnauthorized, web::Data, Error, FromRequest, HttpRequest,
+};
+use futures::Future;
 use ring::{digest, pbkdf2};
 use serde::{Deserialize, Serialize};
-use std::{num::NonZeroU32, u8};
+use std::{num::NonZeroU32, pin::Pin, sync::RwLock, u8};
+
+use super::Sessions;
 
 static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
 const CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
@@ -22,11 +29,11 @@ impl UserReq {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
-    username: String,
+    pub username: String,
     #[serde(with = "serde_bytes")]
-    credential: Vec<u8>,
+    pub credential: Vec<u8>,
 }
 
 impl User {
@@ -65,5 +72,35 @@ impl User {
 
     pub fn get_username(&self) -> String {
         self.username.clone()
+    }
+}
+
+impl FromRequest for User {
+    type Config = ();
+    type Error = Error;
+    type Future = Pin<Box<dyn Future<Output = Result<User, Error>>>>;
+
+    fn from_request(req: &HttpRequest, pl: &mut Payload) -> Self::Future {
+        let fut = Identity::from_request(req, pl);
+        let sessions: Option<&Data<RwLock<Sessions>>> = req.app_data();
+        if sessions.is_none() {
+            return Box::pin(async { Err(ErrorUnauthorized("unauthorized")) });
+        }
+        let sessions = sessions.unwrap().clone();
+        Box::pin(async move {
+            if let Some(identity) = fut.await?.identity() {
+                if let Some(user) = sessions
+                    .read()
+                    .unwrap()
+                    .map
+                    .get(&identity)
+                    .map(|x| x.clone())
+                {
+                    return Ok(user);
+                }
+            };
+
+            Err(ErrorUnauthorized("unauthorized"))
+        })
     }
 }

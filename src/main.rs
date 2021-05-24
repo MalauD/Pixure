@@ -1,6 +1,10 @@
+use std::{collections::HashMap, sync::RwLock};
+
 use actix_identity::{CookieIdentityPolicy, IdentityService};
-use actix_web::{App, HttpServer};
+use actix_web::{web::Data, App, HttpServer};
 use app::{config_media, config_user};
+
+use crate::models::Sessions;
 
 mod app;
 mod db;
@@ -11,8 +15,12 @@ mod tools;
 async fn main() -> std::io::Result<()> {
     const PORT: i32 = 80;
     std::fs::create_dir_all("./tmp").unwrap();
+
+    let sessions: Data<RwLock<Sessions>> = Data::new(RwLock::new(Default::default()));
+
     HttpServer::new(move || {
         App::new()
+            .app_data(sessions.clone())
             .wrap(IdentityService::new(
                 CookieIdentityPolicy::new(&[0; 32])
                     .name("pixure-id")

@@ -1,4 +1,4 @@
-use crate::models::{Identifiable, Media, Resource};
+use crate::models::{Media, Resource};
 use crate::tools::{ResponseStream, SeaweedFsId};
 use crate::{db::get_mongo, tools::ResourceIOError};
 use actix_multipart::Multipart;

@@ -1542,6 +1542,7 @@ version = "0.1.0"
 dependencies = [
  "actix-identity",
  "actix-multipart",
+ "actix-service",
  "actix-session",
  "actix-web",
  "anyhow",
