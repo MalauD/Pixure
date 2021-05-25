@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use mongodb::bson::{from_bson, Bson};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{borrow::BorrowMut, string::String};
 
 use super::get_seaweed;
 use crate::models::{BytesStream, Identifiable, Readable, Writable};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SeaweedFsId {
     id: String,
 }
@@ -57,6 +57,6 @@ impl Identifiable for SeaweedFsId {
         SeaweedFsId { id: uid }
     }
     fn from_bson(bson: &Bson) -> Self {
-       from_bson(bson.clone()).unwrap()
+        from_bson(bson.clone()).unwrap()
     }
 }

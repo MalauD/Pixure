@@ -1,10 +1,12 @@
+use std::fmt::Debug;
+
 use mongodb::{
-    bson::{doc, oid::ObjectId, Document},
+    bson::{doc, oid::ObjectId, to_bson, Document},
     options::ClientOptions,
     Client, Database,
 };
 use once_cell::sync::OnceCell;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::models::{Identifiable, Readable, Resource, User, UserReq, Writable};
@@ -17,20 +19,19 @@ pub struct MongoClient {
 }
 
 impl MongoClient {
-    pub async fn save_resource<T>(&self, doc: &mut Resource<T>)
+    pub async fn save_resource<T>(&self, doc: Resource<T>)
     where
-        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize + Unpin + Debug + Clone,
     {
-        let coll = self._database.collection::<Document>("Media");
-        let result = coll.insert_one(doc.get_doc(), None).await.unwrap();
-        doc.get_doc_ref_mut().insert("_id", result.inserted_id);
+        let coll = self._database.collection::<Resource<T>>("Media");
+        let result = coll.insert_one(doc, None).await.unwrap();
     }
 
     pub async fn find_resource<T>(&self, id: &ObjectId) -> Resource<T>
     where
-        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize + Unpin + Debug + Clone,
     {
-        let coll = self._database.collection::<Document>("Media");
+        let coll = self._database.collection::<Resource<T>>("Media");
         let found = coll
             .find_one(
                 doc! {
@@ -41,18 +42,17 @@ impl MongoClient {
             .await
             .expect("Error");
 
-        Resource::<T>::new(&found.unwrap())
+        found.unwrap()
     }
 
     pub async fn update_resource<T>(&self, res: &Resource<T>)
     where
-        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+        T: Readable + Writable + Identifiable + Serialize + Unpin + Debug + DeserializeOwned + Clone,
     {
-        let coll = self._database.collection::<Document>("Media");
-        let res_doc = res.get_doc();
+        let coll = self._database.collection::<Resource<T>>("Media");
         coll.update_one(
-            doc! {"_id": res_doc.get_object_id("_id").unwrap()},
-            doc! {"$set": res_doc},
+            doc! {"_id": res.get_id().unwrap()},
+            doc! {"$set": to_bson(res).unwrap()},
             None,
         )
         .await

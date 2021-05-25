@@ -19,20 +19,21 @@ pub async fn add_media(mut payload: Multipart) -> impl Responder {
     let mut has_error: Option<ResourceIOError> = None;
     //TODO sanitize input
     while let Ok(Some(mut field)) = payload.try_next().await {
-        let mut res = Resource::<SeaweedFsId>::from((&field, ObjectId::new()));
+        let mut res = Resource::<SeaweedFsId>::from_field(&field, None);
         res.alloc().await;
-        db.save_resource(&mut res).await;
+        res.update_public_access(Some(true), Some(true));
 
         let mut file_data = Vec::new();
         while let Some(chunk) = field.next().await {
             file_data.append(&mut chunk.unwrap().to_vec());
         }
-        res.update_public_access(Some(true), Some(true));
-        db.update_resource(&res).await;
+
         let result = res.save(None, file_data).await;
         result.unwrap_or_else(|e| {
             has_error = Some(e);
-        })
+        });
+
+        db.save_resource(res).await;
     }
 
     match has_error {

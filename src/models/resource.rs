@@ -5,8 +5,8 @@ use bytes::Bytes;
 use futures::Stream;
 use mime::Mime;
 use mongodb::bson::{doc, oid::ObjectId, to_bson, Bson, Document};
-use serde::{de::DeserializeOwned, Serialize};
-use std::pin::Pin;
+use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
+use std::{fmt::Debug, pin::Pin};
 
 extern crate std;
 
@@ -65,12 +65,18 @@ pub trait Identifiable {
     fn from_bson(bson: &Bson) -> Self;
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+    StorageType: Readable + Writable + Identifiable + Serialize + Unpin + Debug + Clone,
 {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    id: Option<ObjectId>,
     _storage: Option<StorageType>,
-    _doc: Document,
+    #[serde(
+        serialize_with = "serialize_mime",
+        deserialize_with = "deserialize_mime"
+    )]
     extension: Mime,
     owner: ObjectId,
     r_access: Vec<ObjectId>,
@@ -79,10 +85,28 @@ where
     w_public: bool,
 }
 
+fn serialize_mime<S>(element: &Mime, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    element.essence_str().serialize(serializer)
+}
+
+fn deserialize_mime<'de, D>(deserializer: D) -> Result<Mime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    String::deserialize(deserializer).map(|mime_type| mime_type.parse::<Mime>().unwrap())
+}
+
 impl<StorageType> Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+    StorageType: Readable + Writable + Identifiable + Serialize + Unpin + Debug + Clone,
 {
+    pub fn get_id(&self) -> Option<&ObjectId> {
+        self.id.as_ref()
+    }
+
     pub async fn read(
         &self,
         request_id_o: Option<ObjectId>,
@@ -122,61 +146,10 @@ where
 
     pub async fn alloc(&mut self) {
         self._storage.get_or_insert(StorageType::alloc().await);
-        self._doc.insert(
-            "_storage",
-            to_bson(self._storage.as_ref().unwrap()).unwrap(),
-        );
     }
 
     pub fn get_storage(&self) -> &Option<StorageType> {
         &self._storage
-    }
-
-    pub fn get_doc_ref(&self) -> &Document {
-        &self._doc
-    }
-
-    pub fn get_doc_ref_mut(&mut self) -> &mut Document {
-        &mut self._doc
-    }
-
-    pub fn get_doc(&self) -> Document {
-        self._doc.clone()
-    }
-
-    pub fn new(doc: &Document) -> Self {
-        let r_access_docs = doc.get_array("r_access").unwrap();
-        let r_access: Vec<ObjectId> = r_access_docs
-            .iter()
-            .map(|r| r.as_object_id().unwrap().clone())
-            .collect();
-
-        let w_access_docs = doc.get_array("w_access").unwrap();
-        let w_access: Vec<ObjectId> = w_access_docs
-            .iter()
-            .map(|w| w.as_object_id().unwrap().clone())
-            .collect();
-
-        let storage = doc.get("_storage");
-
-        Resource {
-            _storage: match storage {
-                Some(x) => Some(StorageType::from_bson(x)),
-                None => None,
-            },
-            _doc: doc.clone(),
-            owner: doc.get_object_id("owner").unwrap().clone(),
-            extension: doc
-                .get_str("extension")
-                .unwrap()
-                .to_owned()
-                .parse::<Mime>()
-                .unwrap(),
-            r_access,
-            w_access,
-            r_public: doc.get_bool("r_public").unwrap_or_default(),
-            w_public: doc.get_bool("w_public").unwrap_or_default(),
-        }
     }
 
     pub fn update_public_access(&mut self, r_public: Option<bool>, w_public: Option<bool>) {
@@ -184,36 +157,30 @@ where
             None => self.r_public,
             Some(e) => e,
         };
-        *self.get_doc_ref_mut().get_bool_mut("r_public").unwrap() = self.r_public;
 
         self.w_public = match w_public {
             None => self.w_public,
             Some(e) => e,
         };
-        *self.get_doc_ref_mut().get_bool_mut("w_public").unwrap() = self.w_public;
     }
-}
 
-impl<StorageType> From<(&Field, ObjectId)> for Resource<StorageType>
-where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
-{
-    fn from(input: (&Field, ObjectId)) -> Self {
-        let doc = doc! {
-            "owner": input.1.clone(),
-            "r_access": [input.1.clone()],
-            "w_access": [input.1.clone()],
-            "extension": input.0.content_type().essence_str(),
-            "r_public": false,
-            "w_public": false,
-        };
-        Self::new(&doc)
+    pub fn from_field(field: &Field, id: Option<ObjectId>) -> Self {
+        Self {
+            id: None,
+            _storage: None,
+            owner: id.clone().unwrap_or_default(),
+            r_access: vec![id.clone().unwrap_or_default()],
+            w_access: vec![id.clone().unwrap_or_default()],
+            extension: field.content_type().clone(),
+            r_public: false,
+            w_public: false,
+        }
     }
 }
 
 impl<StorageType> Media for Resource<StorageType>
 where
-    StorageType: Readable + Writable + Identifiable + DeserializeOwned + Serialize,
+    StorageType: Readable + Writable + Identifiable + Serialize + Unpin + Debug + Clone,
 {
     fn get_dim(&self) -> Dim {
         todo!()
