@@ -46,7 +46,11 @@ pub async fn get_media(path: web::Path<String>) -> impl Responder {
     let id = path.into_inner();
     let db = get_mongo().await;
 
-    let doc: Resource<SeaweedFsId> = db.find_resource(&ObjectId::with_string(&id).unwrap()).await;
+    let doc: Resource<SeaweedFsId> = db
+        .find_resource(&ObjectId::with_string(&id).unwrap())
+        .await
+        .unwrap()
+        .unwrap();
 
     let stream = doc.read(None).await;
 

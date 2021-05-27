@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use mongodb::{
-    bson::{doc, oid::ObjectId, to_bson, Document},
+    bson::{doc, oid::ObjectId, to_bson},
+    error::{Error, Result},
     options::ClientOptions,
     Client, Database,
 };
@@ -19,35 +20,53 @@ pub struct MongoClient {
 }
 
 impl MongoClient {
-    pub async fn save_resource<T>(&self, doc: Resource<T>)
+    pub async fn save_resource<T>(&self, doc: Resource<T>) -> Result<()>
     where
-        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize + Unpin + Debug + Clone,
+        T: Readable
+            + Writable
+            + Identifiable
+            + DeserializeOwned
+            + Serialize
+            + Unpin
+            + Debug
+            + Clone,
     {
         let coll = self._database.collection::<Resource<T>>("Media");
-        let result = coll.insert_one(doc, None).await.unwrap();
+        coll.insert_one(doc, None).await?;
+        Ok(())
     }
 
-    pub async fn find_resource<T>(&self, id: &ObjectId) -> Resource<T>
+    pub async fn find_resource<T>(&self, id: &ObjectId) -> Result<Option<Resource<T>>>
     where
-        T: Readable + Writable + Identifiable + DeserializeOwned + Serialize + Unpin + Debug + Clone,
+        T: Readable
+            + Writable
+            + Identifiable
+            + DeserializeOwned
+            + Serialize
+            + Unpin
+            + Debug
+            + Clone,
     {
         let coll = self._database.collection::<Resource<T>>("Media");
-        let found = coll
-            .find_one(
-                doc! {
-                    "_id": id
-                },
-                None,
-            )
-            .await
-            .expect("Error");
-
-        found.unwrap()
+        coll.find_one(
+            doc! {
+                "_id": id
+            },
+            None,
+        )
+        .await
     }
 
-    pub async fn update_resource<T>(&self, res: &Resource<T>)
+    pub async fn update_resource<T>(&self, res: &Resource<T>) -> Result<()>
     where
-        T: Readable + Writable + Identifiable + Serialize + Unpin + Debug + DeserializeOwned + Clone,
+        T: Readable
+            + Writable
+            + Identifiable
+            + Serialize
+            + Unpin
+            + Debug
+            + DeserializeOwned
+            + Clone,
     {
         let coll = self._database.collection::<Resource<T>>("Media");
         coll.update_one(
@@ -55,28 +74,27 @@ impl MongoClient {
             doc! {"$set": to_bson(res).unwrap()},
             None,
         )
-        .await
-        .unwrap();
+        .await?;
+        Ok(())
     }
 
-    pub async fn get_user(&self, user: &UserReq) -> Option<User> {
+    pub async fn get_user(&self, user: &UserReq) -> Result<Option<User>> {
         let coll = self._database.collection::<User>("User");
         coll.find_one(doc! {"username": user.get_username()}, None)
             .await
-            .unwrap()
     }
 
-    pub async fn save_user(&self, user: User) {
+    pub async fn save_user(&self, user: User) -> Result<()> {
         let coll = self._database.collection::<User>("User");
-        coll.insert_one(user, None).await.unwrap();
+        coll.insert_one(user, None).await;
+        Ok(())
     }
 
-    pub async fn has_user_by_name(&self, user: &User) -> bool {
+    pub async fn has_user_by_name(&self, user: &User) -> Result<bool> {
         let coll = self._database.collection::<User>("User");
         coll.count_documents(doc! {"username": user.get_username()}, None)
             .await
-            .unwrap()
-            != 0
+            .map(|c| c != 0)
     }
 }
 

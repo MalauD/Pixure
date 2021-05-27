@@ -6,6 +6,7 @@ use actix_web::{web, HttpResponse, Responder};
 use crate::{
     db::get_mongo,
     models::{Sessions, User, UserReq},
+    tools::UserError,
 };
 
 pub fn config_user(cfg: &mut web::ServiceConfig) {
@@ -22,23 +23,19 @@ pub async fn login(
     id: Identity,
     user: web::Json<UserReq>,
     sessions: web::Data<RwLock<Sessions>>,
-) -> impl Responder {
+) -> Result<HttpResponse, UserError> {
     let db = get_mongo().await;
-    if let Some(user_mod) = db.get_user(&user).await {
-        match user_mod.login(&user) {
-            Ok(_) => {
-                id.remember(user_mod.get_username());
-                sessions
-                    .write()
-                    .unwrap()
-                    .map
-                    .insert(user_mod.get_username(), user_mod);
-                HttpResponse::Ok().append_header(("location", "/")).finish()
-            }
-            Err(_) => HttpResponse::Unauthorized().finish(),
-        }
+    if let Some(user_mod) = db.get_user(&user).await? {
+        user_mod.login(&user)?;
+        id.remember(user_mod.get_username());
+        sessions
+            .write()
+            .unwrap()
+            .map
+            .insert(user_mod.get_username(), user_mod);
+        Ok(HttpResponse::Ok().append_header(("location", "/")).finish())
     } else {
-        HttpResponse::Forbidden().finish()
+        Ok(HttpResponse::Forbidden().finish())
     }
 }
 
@@ -50,7 +47,7 @@ pub async fn register(
     let db = get_mongo().await;
     let user_mod = User::new(&user.0);
 
-    if db.has_user_by_name(&user_mod).await {
+    if db.has_user_by_name(&user_mod).await.unwrap() {
         return HttpResponse::Unauthorized().finish();
     }
     let user_saved = user_mod.clone();
