@@ -22,9 +22,7 @@ impl ResponseError for ResourceIOError {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponseBuilder::new(self.status_code())
-            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
-            .body(self.to_string())
+        HttpResponseBuilder::new(self.status_code()).finish()
     }
 }
 
@@ -45,8 +43,6 @@ impl ResponseError for UserError {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponseBuilder::new(self.status_code())
-            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
-            .body(self.to_string())
+        HttpResponseBuilder::new(self.status_code()).finish()
     }
 }

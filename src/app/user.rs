@@ -1,13 +1,13 @@
-use std::sync::RwLock;
-
-use actix_identity::Identity;
-use actix_web::{web, HttpResponse, Responder};
-
 use crate::{
     db::get_mongo,
     models::{Sessions, User, UserReq},
     tools::UserError,
 };
+use actix_identity::Identity;
+use actix_web::{web, HttpResponse, Responder};
+use std::sync::RwLock;
+
+type UserResponse = Result<HttpResponse, UserError>;
 
 pub fn config_user(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -23,7 +23,7 @@ pub async fn login(
     id: Identity,
     user: web::Json<UserReq>,
     sessions: web::Data<RwLock<Sessions>>,
-) -> Result<HttpResponse, UserError> {
+) -> UserResponse {
     let db = get_mongo().await;
     if let Some(user_mod) = db.get_user(&user).await? {
         user_mod.login(&user)?;
@@ -43,27 +43,27 @@ pub async fn register(
     id: Identity,
     user: web::Json<UserReq>,
     sessions: web::Data<RwLock<Sessions>>,
-) -> impl Responder {
+) -> UserResponse {
     let db = get_mongo().await;
     let user_mod = User::new(&user.0);
 
-    if db.has_user_by_name(&user_mod).await.unwrap() {
-        return HttpResponse::Unauthorized().finish();
+    if db.has_user_by_name(&user_mod).await? {
+        return Ok(HttpResponse::Unauthorized().finish());
     }
     let user_saved = user_mod.clone();
-    db.save_user(user_mod).await;
+    db.save_user(user_mod).await?;
     id.remember(user.get_username());
     sessions
         .write()
         .unwrap()
         .map
         .insert(user.get_username(), user_saved.clone());
-    HttpResponse::Ok().append_header(("location", "/")).finish()
+    Ok(HttpResponse::Ok().append_header(("location", "/")).finish())
 }
 
-pub async fn logout(id: Identity) -> impl Responder {
+pub async fn logout(id: Identity) -> UserResponse {
     id.forget();
-    HttpResponse::Ok().append_header(("location", "/")).finish()
+    Ok(HttpResponse::Ok().append_header(("location", "/")).finish())
 }
 
 pub async fn get_account(user: User) -> impl Responder {
