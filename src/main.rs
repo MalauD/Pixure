@@ -14,7 +14,6 @@ mod tools;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     const PORT: i32 = 80;
-    std::fs::create_dir_all("./tmp").unwrap();
 
     let sessions: Data<RwLock<Sessions>> = Data::new(RwLock::new(Default::default()));
 

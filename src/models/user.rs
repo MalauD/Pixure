@@ -4,6 +4,7 @@ use actix_web::{
     dev::Payload, error::ErrorUnauthorized, web::Data, Error, FromRequest, HttpRequest,
 };
 use futures::Future;
+use mongodb::bson::oid::ObjectId;
 use ring::{digest, pbkdf2};
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, pin::Pin, sync::RwLock, u8};
@@ -31,6 +32,8 @@ impl UserReq {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    id: Option<ObjectId>,
     pub username: String,
     #[serde(with = "serde_bytes")]
     pub credential: Vec<u8>,
@@ -65,6 +68,7 @@ impl User {
         let mut cred = [0u8; CREDENTIAL_LEN];
         pbkdf2::derive(PBKDF2_ALG, iter, &salt, req.password.as_bytes(), &mut cred);
         Self {
+            id: None,
             username: req.username.clone(),
             credential: cred.to_vec(),
         }
@@ -72,6 +76,10 @@ impl User {
 
     pub fn get_username(&self) -> String {
         self.username.clone()
+    }
+
+    pub fn get_id(&self) -> Option<ObjectId> {
+        self.id.clone()
     }
 }
 

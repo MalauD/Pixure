@@ -1,4 +1,4 @@
-use crate::tools::ResourceIOError;
+use crate::{models::User, tools::ResourceIOError};
 use actix_multipart::Field;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -107,16 +107,15 @@ where
         self.id.as_ref()
     }
 
-    pub async fn read(
-        &self,
-        request_id_o: Option<ObjectId>,
-    ) -> Result<BytesStream, ResourceIOError> {
+    pub async fn read(&self, request_user: Option<&User>) -> Result<BytesStream, ResourceIOError> {
         if self.r_public {
             return Ok(self._storage.as_ref().unwrap().read().await);
         }
-        if let Some(request_id) = request_id_o {
-            if request_id == self.get_owner() || self.r_access.contains(&request_id) {
-                return Ok(self._storage.as_ref().unwrap().read().await);
+        if let Some(user) = request_user {
+            if let Some(request_id) = user.get_id() {
+                if request_id == self.get_owner() || self.r_access.contains(&request_id) {
+                    return Ok(self._storage.as_ref().unwrap().read().await);
+                }
             }
         }
         Err(ResourceIOError::InsufficientPermissions(
@@ -126,17 +125,19 @@ where
 
     pub async fn save(
         &self,
-        request_id_o: Option<ObjectId>,
+        request_user: Option<&User>,
         data: Vec<u8>,
     ) -> Result<(), ResourceIOError> {
         if self.w_public {
             self._storage.as_ref().unwrap().save(data).await;
             return Ok(());
         }
-        if let Some(request_id) = request_id_o {
-            if request_id == self.get_owner() || self.w_access.contains(&request_id) {
-                self._storage.as_ref().unwrap().save(data).await;
-                return Ok(());
+        if let Some(user) = request_user {
+            if let Some(request_id) = user.get_id() {
+                if request_id == self.get_owner() || self.w_access.contains(&request_id) {
+                    self._storage.as_ref().unwrap().save(data).await;
+                    return Ok(());
+                }
             }
         }
         Err(ResourceIOError::InsufficientPermissions(
@@ -164,13 +165,14 @@ where
         };
     }
 
-    pub fn from_field(field: &Field, id: Option<ObjectId>) -> Self {
+    pub fn from_field(field: &Field, user: &User) -> Self {
+        let id = user.get_id().unwrap();
         Self {
             id: None,
             _storage: None,
-            owner: id.clone().unwrap_or_default(),
-            r_access: vec![id.clone().unwrap_or_default()],
-            w_access: vec![id.clone().unwrap_or_default()],
+            owner: id.clone(),
+            r_access: vec![id.clone()],
+            w_access: vec![id.clone()],
             extension: field.content_type().clone(),
             r_public: false,
             w_public: false,

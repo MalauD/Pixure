@@ -1,10 +1,12 @@
-use crate::models::{Media, Resource};
+use crate::models::{Media, Resource, User};
 use crate::tools::{ResponseStream, SeaweedFsId};
 use crate::{db::get_mongo, tools::ResourceIOError};
 use actix_multipart::Multipart;
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse};
 use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::oid::ObjectId;
+
+type ResourceResponse = Result<HttpResponse, ResourceIOError>;
 
 pub fn config_media(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -14,35 +16,28 @@ pub fn config_media(cfg: &mut web::ServiceConfig) {
     );
 }
 
-pub async fn add_media(mut payload: Multipart) -> impl Responder {
+pub async fn add_media(mut payload: Multipart, user: User) -> ResourceResponse {
     let db = get_mongo().await;
-    let mut has_error: Option<ResourceIOError> = None;
     //TODO sanitize input
     while let Ok(Some(mut field)) = payload.try_next().await {
-        let mut res = Resource::<SeaweedFsId>::from_field(&field, None);
+        let mut res = Resource::<SeaweedFsId>::from_field(&field, &user);
         res.alloc().await;
-        res.update_public_access(Some(true), Some(true));
+        //res.update_public_access(Some(true), Some(true));
 
         let mut file_data = Vec::new();
         while let Some(chunk) = field.next().await {
             file_data.append(&mut chunk.unwrap().to_vec());
         }
+        println!("Saving file");
+        res.save(Some(&user), file_data).await?;
 
-        let result = res.save(None, file_data).await;
-        result.unwrap_or_else(|e| {
-            has_error = Some(e);
-        });
-
-        db.save_resource(res).await;
+        db.save_resource(res).await?;
     }
 
-    match has_error {
-        Some(_) => HttpResponse::Unauthorized(),
-        None => HttpResponse::Ok(),
-    }
+    Ok(HttpResponse::Ok().finish())
 }
 
-pub async fn get_media(path: web::Path<String>) -> impl Responder {
+pub async fn get_media(path: web::Path<String>, user: User) -> ResourceResponse {
     let id = path.into_inner();
     let db = get_mongo().await;
 
@@ -52,12 +47,12 @@ pub async fn get_media(path: web::Path<String>) -> impl Responder {
         .unwrap()
         .unwrap();
 
-    let stream = doc.read(None).await;
+    let stream = doc.read(Some(&user)).await;
 
     match stream {
-        Ok(s) => HttpResponse::Ok()
+        Ok(s) => Ok(HttpResponse::Ok()
             .content_type(doc.get_extension().essence_str())
-            .streaming(ResponseStream { stream: s }),
-        Err(_) => HttpResponse::Unauthorized().finish(),
+            .streaming(ResponseStream { stream: s })),
+        Err(_) => Ok(HttpResponse::Unauthorized().finish()),
     }
 }
