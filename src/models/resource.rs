@@ -103,10 +103,12 @@ impl<StorageType> Resource<StorageType>
 where
     StorageType: Readable + Writable + Identifiable + Serialize + Unpin + Debug + Clone,
 {
+    ///Return _id identifier produced by MongoDb
     pub fn get_id(&self) -> Option<&ObjectId> {
         self.id.as_ref()
     }
 
+    ///Get a stream of underlying storage
     pub async fn read(&self, request_user: Option<&User>) -> Result<BytesStream, ResourceIOError> {
         if self.r_public {
             return Ok(self._storage.as_ref().unwrap().read().await);
@@ -123,6 +125,7 @@ where
         ))
     }
 
+    ///Save storage to resource
     pub async fn save(
         &self,
         request_user: Option<&User>,
@@ -145,14 +148,18 @@ where
         ))
     }
 
+    ///Allocate storage of underlying storage.
+    ///Calls alloc() of Storage
     pub async fn alloc(&mut self) {
         self._storage.get_or_insert(StorageType::alloc().await);
     }
 
+    ///Get underlying storage
     pub fn get_storage(&self) -> &Option<StorageType> {
         &self._storage
     }
 
+    ///Change access rights of the resource
     pub fn update_public_access(&mut self, r_public: Option<bool>, w_public: Option<bool>) {
         self.r_public = match r_public {
             None => self.r_public,
@@ -165,6 +172,7 @@ where
         };
     }
 
+    ///Create resource from http body Field
     pub fn from_field(field: &Field, user: &User) -> Self {
         let id = user.get_id().unwrap();
         Self {
