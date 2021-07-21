@@ -1,8 +1,4 @@
-use actix_web::{
-    dev::HttpResponseBuilder,
-    http::{header, StatusCode},
-    HttpResponse, Responder, ResponseError,
-};
+use actix_web::{dev::HttpResponseBuilder, http::StatusCode, HttpResponse, ResponseError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

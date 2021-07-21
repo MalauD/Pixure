@@ -1,8 +1,7 @@
-use std::{collections::HashMap, sync::RwLock};
-
 use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::{web::Data, App, HttpServer};
 use app::{config_media, config_user};
+use std::sync::RwLock;
 
 use crate::models::Sessions;
 

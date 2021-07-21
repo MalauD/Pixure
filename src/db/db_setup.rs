@@ -2,12 +2,12 @@ use std::fmt::Debug;
 
 use mongodb::{
     bson::{doc, oid::ObjectId, to_bson},
-    error::{Error, Result},
+    error::Result,
     options::ClientOptions,
     Client, Database,
 };
 use once_cell::sync::OnceCell;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::Mutex;
 
 use crate::models::{Identifiable, Readable, Resource, User, UserReq, Writable};
@@ -86,7 +86,7 @@ impl MongoClient {
 
     pub async fn save_user(&self, user: User) -> Result<()> {
         let coll = self._database.collection::<User>("User");
-        coll.insert_one(user, None).await;
+        coll.insert_one(user, None).await?;
         Ok(())
     }
 

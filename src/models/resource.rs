@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::Stream;
 use mime::Mime;
-use mongodb::bson::{doc, oid::ObjectId, to_bson, Bson, Document};
-use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
+use mongodb::bson::{doc, oid::ObjectId, Bson};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fmt::Debug, pin::Pin};
 
 extern crate std;

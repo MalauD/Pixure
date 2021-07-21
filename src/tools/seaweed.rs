@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use mongodb::bson::{from_bson, Bson};
 use serde::{Deserialize, Serialize};
-use std::{borrow::BorrowMut, string::String};
+use std::string::String;
 
 use super::get_seaweed;
 use crate::models::{BytesStream, Identifiable, Readable, Writable};
