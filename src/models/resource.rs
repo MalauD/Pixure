@@ -66,6 +66,12 @@ pub trait Identifiable {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AccessRight {
+    user: ObjectId,
+    write: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Resource<StorageType>
 where
     StorageType: Readable + Writable + Identifiable + Serialize + Unpin + Debug + Clone,
@@ -79,8 +85,7 @@ where
     )]
     extension: Mime,
     owner: ObjectId,
-    r_access: Vec<ObjectId>,
-    w_access: Vec<ObjectId>,
+    access: Vec<AccessRight>,
     r_public: bool,
     w_public: bool,
 }
@@ -115,7 +120,9 @@ where
         }
         if let Some(user) = request_user {
             if let Some(request_id) = user.get_id() {
-                if request_id == self.get_owner() || self.r_access.contains(&request_id) {
+                if request_id == self.get_owner()
+                    || self.access.iter().any(|a| a.user == request_id)
+                {
                     return Ok(self._storage.as_ref().unwrap().read().await);
                 }
             }
@@ -137,7 +144,7 @@ where
         }
         if let Some(user) = request_user {
             if let Some(request_id) = user.get_id() {
-                if request_id == self.get_owner() || self.w_access.contains(&request_id) {
+                if request_id == self.get_owner() || self.access.iter().any(|a| a.write == true) {
                     self._storage.as_ref().unwrap().save(data).await;
                     return Ok(());
                 }
@@ -179,8 +186,10 @@ where
             id: None,
             _storage: None,
             owner: id.clone(),
-            r_access: vec![id.clone()],
-            w_access: vec![id.clone()],
+            access: vec![AccessRight {
+                user: id.clone(),
+                write: true,
+            }],
             extension: field.content_type().clone(),
             r_public: false,
             w_public: false,

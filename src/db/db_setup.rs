@@ -123,6 +123,25 @@ pub async fn get_mongo() -> &'static MongoClient {
             }
         }
     }
+    MONGO
+        .get()
+        .unwrap()
+        ._database
+        .run_command(
+            doc! {
+                "createIndexes": "Media",
+                "indexes": [
+                    {
+                        "key": { "access": 1 },
+                        "name": "access_index",
+                        "unique": false
+                    },
+                ]
+            },
+            None,
+        )
+        .await
+        .expect("Cannot create index");
     drop(initialized);
     MONGO.get().unwrap()
 }
