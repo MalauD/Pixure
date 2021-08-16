@@ -1,7 +1,7 @@
 use crate::{
-    db::get_mongo,
+    db::{get_mongo, PaginationOptions},
     models::{Sessions, User, UserReq},
-    tools::UserError,
+    tools::{SeaweedFsId, UserError},
 };
 use actix_identity::Identity;
 use actix_web::{web, HttpResponse, Responder};
@@ -15,7 +15,8 @@ pub fn config_user(cfg: &mut web::ServiceConfig) {
             .route("/login", web::post().to(login))
             .route("/register", web::post().to(register))
             .route("/logout", web::post().to(logout))
-            .route("/user", web::get().to(get_account)),
+            .route("/user", web::get().to(get_account))
+            .route("/mediaOwned", web::get().to(get_owned_medias)),
     );
 }
 
@@ -68,4 +69,17 @@ pub async fn logout(id: Identity) -> UserResponse {
 
 pub async fn get_account(user: User) -> impl Responder {
     web::Json(user)
+}
+
+pub async fn get_owned_medias(
+    user: User,
+    pagination: web::Query<PaginationOptions>,
+) -> UserResponse {
+    let db = get_mongo().await;
+    //FIXME find_owned_resources should not depend on SeaweedFsId
+    let owned_res = db
+        .find_owned_resources::<SeaweedFsId>(&user.get_id().unwrap(), &pagination)
+        .await?;
+
+    Ok(HttpResponse::Ok().json(owned_res))
 }
